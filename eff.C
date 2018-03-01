@@ -10,8 +10,8 @@
 #include <TAxis.h>
 #include <TMath.h>
 
-#define NORD 3 
-#define NORDANG 4 
+#define NORD 0
+#define NORDANG 0
 
 using namespace std;
 
@@ -44,6 +44,38 @@ double cheb(double x, int ord){
   }
 
   return val;
+}
+
+int factorial(int n){
+
+  if (n == 0) return 1;
+else return n*factorial(n-1);
+}
+
+int binomial(int k, int n){
+if (k > n) return 0;
+else return factorial(n)/factorial(k)*factorial(n-k);
+}
+
+double bernstein(double x, int i, int order, int var){
+
+double a, b;
+  switch (var) {
+  case 0: a = 0.6; b = 2.2; //MassKPi
+    break;
+  case 1: a = 3.2; b = 4.8; //MassPsiPi
+    break;
+  case 2: a = -1; b = 1; //CosMuMu
+    break;
+  case 3: a = -3.14; b = 3.14; //Phi
+    break;
+  default: return 0;
+}
+
+x = (x-a)/(b-a);
+
+return binomial(i, order)*pow(x, i)*pow(1-x, order-i);
+
 }
 
 double ellEff(double *x, double* par){
@@ -101,14 +133,21 @@ double dalitzEff(double *x, double* par){
     }
     }
   */
+ /* 
   for (int i = 0; i < NORD+1; i++) {
     for (int j = 0; j < NORD+1; j++) {
       val2 += par[i + j*(NORD+1)]*cheb(x[0], i)*cheb(x[1], j);
     }
   }
+*/
 
-  val = val1*val2;
-  return val;
+  for (int i = 0; i < NORD+1; i++) {
+    for (int j = 0; j < NORD+1; j++) {
+    val2 += par[i + j*(NORD+1)]*bernstein(x[0], i, NORD, 0)*bernstein(x[1], j, NORD, 1);
+    }
+  }
+
+  return val1*val2;
 }
 
 double rectEff(double *x, double *par){
@@ -127,7 +166,7 @@ double rectEff(double *x, double *par){
   if (x[1] < ymin || x[1] > ymax) valy = 0;
   val1 = valx*valy;
 
-  int n1 = 2;
+//  int n1 = 2;
   val2 = 0;
   /*
     for (int i = 0; i < NORDANG+1; i++) {
@@ -136,10 +175,18 @@ double rectEff(double *x, double *par){
     }
     }
   */
-
+/*int n1 = 0;
+  
   for (int i = 0; i < NORDANG+1; i++) {
     for (int j = 0; j < NORDANG+1; j++) {
       val2 += par[n1 + i + j*(NORDANG+1)]*cheb(x[0], i)*cheb(x[1], j);
+    }
+  }
+  */
+
+  for (int i = 0; i < NORDANG+1; i++) {
+    for (int j = 0; j < NORDANG+1; j++) {
+    val2 += par[i + j*(NORDANG+1)]*bernstein(x[0], i, NORDANG, 2)*bernstein(x[1], j, NORDANG, 3);
     }
   }
 
@@ -178,7 +225,21 @@ int eff(int ellEffMass = 0){
     std::cout<<"ERROR! Efficiency TH2 named \'"<<relEffNameAng <<"\' not found in TFile \'" <<effFile->GetName() <<"\'.\nReturning" <<std::endl;
     return -1;
   }
+  /*
+    relEffNameMass.ReplaceAll("Rel","Abs"); relEffNameAng.ReplaceAll("Rel", "Abs");
 
+    TH2F* absEffTH2Mass = (TH2F*)effFile->Get(relEffNameMass) ;
+    TH2F* absEffTH2Ang = (TH2F*)effFile->Get(relEffNameAng) ;
+
+    if (!(absEffTH2Mass)) {
+    std::cout<<"ERROR! Efficiency TH2 named \'"<<relEffNameMass <<"\' not found in TFile \'" <<effFile->GetName() <<"\'.\nReturning" <<std::endl;
+    return -1;
+    }
+    if (!(absEffTH2Ang)) {
+    std::cout<<"ERROR! Efficiency TH2 named \'"<<relEffNameAng <<"\' not found in TFile \'" <<effFile->GetName() <<"\'.\nReturning" <<std::endl;
+    return -1;
+    }
+  */
   double xMinMass = relEffTH2Mass->GetXaxis()->GetBinLowEdge(1);
   double xMaxMass = relEffTH2Mass->GetXaxis()->GetBinUpEdge(relEffTH2Mass->GetNbinsX());
   double yMinMass = relEffTH2Mass->GetYaxis()->GetBinLowEdge(1);
@@ -187,6 +248,14 @@ int eff(int ellEffMass = 0){
   double xMaxAng = relEffTH2Ang->GetXaxis()->GetBinUpEdge(relEffTH2Ang->GetNbinsX());
   double yMinAng = relEffTH2Ang->GetYaxis()->GetBinLowEdge(1);
   double yMaxAng = relEffTH2Ang->GetYaxis()->GetBinUpEdge(relEffTH2Ang->GetNbinsY());
+
+  TH2F* chiTH2Mass = new TH2F("chiTH2Mass", "chiTH2Mass", relEffTH2Mass->GetNbinsX(), xMinMass, xMaxMass, relEffTH2Mass->GetNbinsY(), yMinMass, yMaxMass);
+  TH2F* chiTH2Ang = new TH2F("chiTH2Ang", "chiTH2Ang", relEffTH2Ang->GetNbinsX(), xMinAng, xMaxAng, relEffTH2Ang->GetNbinsY(), yMinAng, yMaxAng);
+
+  double chiKPi[relEffTH2Mass->GetNbinsX()], chiPsiPi[relEffTH2Mass->GetNbinsY()];
+  double chiCosMuMu[relEffTH2Ang->GetNbinsX()], chiPhi[relEffTH2Ang->GetNbinsY()];
+  double indexKPi[relEffTH2Mass->GetNbinsX()], indexPsiPi[relEffTH2Mass->GetNbinsY()];
+  double indexCosMuMu[relEffTH2Ang->GetNbinsX()], indexPhi[relEffTH2Ang->GetNbinsY()];
 
   //Mass efficiency
 
@@ -203,83 +272,161 @@ int eff(int ellEffMass = 0){
       par[index] = ellPar[index];
   } 
 
-  for (int index = n1; index < n1+n2; index++)
-    par[index] = 0.0;
-
-  par[0] = 5; //c00 = 1
+  //sarebbe par[n1+..]
+/*  par[0] = 5; //coeff per cheb ordine 3
   par[1] = -3;
   par[2] = 2;
-  par[3] = -0.1;
-  par[4] = -1;
-  par[5] = -1;
+  par[3] = -0.2;
+  par[4] = -0.6;
+  par[5] = -0.7;
+*/  for (int index = n1; index < n1+n2; index++)
+    par[index] = 1; /////////coeff per bern
 
   TF2* fitFun;
 
   if (ellEffMass)
     fitFun = new TF2("fitMassEff", ellEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
   else fitFun = new TF2("fitMassEff", dalitzEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
-
   fitFun->SetParameters(par);
-
   double margin = 5;
-
   for (int index = 0; index < n1+n2; index++)
     fitFun->SetParLimits(index, par[index]-margin, par[index]+margin);
 
   relEffTH2Mass->Fit("fitMassEff");
  
-  const int nbins = 200;
+  const int nbins0 = relEffTH2Mass->GetNbinsX()*10;
+  const int nbins1 = relEffTH2Mass->GetNbinsY()*10;
+  const int nbins2 = relEffTH2Ang->GetNbinsX()*10;
+  const int nbins3 = relEffTH2Ang->GetNbinsY()*10;
 
   TH1F* xProj = new TH1F("mKPiEff", "mKPiEff", relEffTH2Mass->GetNbinsX(), xMinMass, xMaxMass);
   TH1F* yProj = new TH1F("mPsiPiEff", "mPsiPiEff", relEffTH2Mass->GetNbinsY(), yMinMass, yMaxMass);
-  TH1F* xFitProj = new TH1F("mKPiEffFit","mKPiEffFit", nbins, xMinMass, xMaxMass);
-  TH1F* yFitProj = new TH1F("mPsiPiEffFit","mPsiPiEffFit", nbins, yMinMass, yMaxMass);
+  TH1F* xFitProj = new TH1F("mKPiEffFit","mKPiEffFit", nbins0, xMinMass, xMaxMass);
+  TH1F* yFitProj = new TH1F("mPsiPiEffFit","mPsiPiEffFit", nbins1, yMinMass, yMaxMass);
 
-  double sum = 0;
+ int scalex = floor(nbins0/relEffTH2Mass->GetNbinsX()); //nbinsx
+ int scaley = floor(nbins1/relEffTH2Mass->GetNbinsY()); //nbinsy
+
+  double sum = 0, val = 0;
+  int count = 0;
+  double xvar, yvar;
 
   for (int i = 0; i < xProj->GetNbinsX(); i++) {
     sum = 0;
     for (int j = 0; j < relEffTH2Mass->GetNbinsY(); j++) {
-      sum += relEffTH2Mass->GetBinContent(i+1, j+1);
+      val = relEffTH2Mass->GetBinContent(i+1, j+1);
+      sum += val;
     }
-    sum *= (yMaxMass - yMinMass)/relEffTH2Mass->GetNbinsY();
     xProj->SetBinContent(i+1, sum);
   }
 
   for (int j = 0; j < yProj->GetNbinsX(); j++) {
     sum = 0;
     for (int i = 0; i < relEffTH2Mass->GetNbinsX(); i++) {
-      sum += relEffTH2Mass->GetBinContent(i+1, j+1);
+      val = relEffTH2Mass->GetBinContent(i+1, j+1);
+      sum += val;
     }
-    sum *= (xMaxMass - xMinMass)/relEffTH2Mass->GetNbinsX();
     yProj->SetBinContent(j+1, sum);
   }
 
-  double deltax = (xMaxMass - xMinMass)/nbins;
-  double deltay = (yMaxMass - yMinMass)/nbins;
-  double xvar, yvar;
+  double deltax = (xMaxMass - xMinMass)/nbins0;
+  double deltay = (yMaxMass - yMinMass)/nbins1;
 
-  for (int i = 0; i < nbins; i++) {
+  for (int i = 0; i < nbins0; i++) {
     sum = 0;
     xvar = xMinMass + (i + 0.5)*deltax;
-    for (int j = 0; j < nbins; j++) {
+    for (int j = 0; j < nbins1; j++) {
       yvar = yMinMass + (j + 0.5)*deltay;
-      sum += fitFun->Eval(xvar, yvar);
+      val = fitFun->Eval(xvar, yvar);
+      sum += val;
     }
-    sum *= deltay;
+    sum *= pow(scaley, -1);
     xFitProj->SetBinContent(i+1, sum);
   }
 
-  for (int j = 0; j < nbins; j++) {
+  for (int j = 0; j < nbins1; j++) {
     sum = 0;
     yvar = yMinMass + (j + 0.5)*deltay;
-    for (int i = 0; i < nbins; i++) {
+    for (int i = 0; i < nbins0; i++) {
       xvar = xMinMass + (i + 0.5)*deltax;
-      sum += fitFun->Eval(xvar, yvar);
+      val = fitFun->Eval(xvar, yvar);
+      sum += val;
     }
-    sum *= deltax;
+    sum *= pow(scalex, -1);
     yFitProj->SetBinContent(j+1, sum);
   }
+
+  //Mass chisquare 1x2D + 2x1D
+
+  double chi = 0, sigma = 0;
+  double widthx = (xMaxMass - xMinMass)/relEffTH2Mass->GetNbinsX();
+  double widthy = (yMaxMass - yMinMass)/relEffTH2Mass->GetNbinsY();  
+
+  for (int i = 0; i < chiTH2Mass->GetNbinsX(); i++) {
+    for (int j = 0; j < chiTH2Mass->GetNbinsY(); j++) {
+      sum = 0;
+      count = 0;
+      for (int k = 0; k < scalex; k++) {
+	for (int l = 0; l < scaley; l++) {
+	  xvar = xMinMass + i*widthx + (k + 0.5)*deltax;
+	  yvar = yMinMass + j*widthy + (l + 0.5)*deltay;
+	  val = fitFun->Eval(xvar, yvar);
+          sum += val;
+          if (val != 0) count++;
+	}
+      }
+      count == 0 ? sum = 0 : sum = sum/count;
+      chi = relEffTH2Mass->GetBinContent(i+1, j+1) - sum;
+      sigma = pow(relEffTH2Mass->GetBinContent(i+1, j+1), 0.5);
+      sigma == 0 ? chi = 0 : chi = pow(chi/sigma, 2);
+      chiTH2Mass->SetBinContent(i+1, j+1, chi);
+    }
+  }
+
+  //Pull MassKPi
+ 
+  for (int i = 0; i < xProj->GetNbinsX(); i++) {
+    sum = 0;
+    for (int j = 0; j < yProj->GetNbinsX(); j++) {
+      for (int k = 0; k < scalex; k++) {
+        xvar = xMinMass + i*widthx + (k + 0.5)*deltax;
+        for (int l = 0; l < scaley; l++) {
+          yvar = yMinMass + j*widthy + (l + 0.5)*deltay;
+          sum += fitFun->Eval(xvar, yvar);
+        }
+      }
+    }
+   sum *= pow(scalex*scaley, -1);
+    chi = xProj->GetBinContent(i+1) - sum;
+      sigma = pow(xProj->GetBinContent(i+1), 0.5);
+   sigma == 0 ? chi = 0 : chi = chi/sigma;
+    indexKPi[i] = xMinMass + (i+0.5)*widthx;
+    chiKPi[i] = chi;
+  }
+
+//Pull MassPsiPi
+
+  for (int j = 0; j < yProj->GetNbinsX(); j++) {
+    sum = 0;
+    for (int i = 0; i < xProj->GetNbinsX(); i++) {
+      for (int k = 0; k < scalex; k++) {
+        xvar = xMinMass + i*widthx + (k + 0.5)*deltax;
+        for (int l = 0; l < scaley; l++) {
+          yvar = yMinMass + j*widthy + (l + 0.5)*deltay;
+          sum += fitFun->Eval(xvar, yvar);
+        }
+      }
+    }
+    sum *= pow(scalex*scaley, -1);
+    chi = yProj->GetBinContent(j+1) - sum;
+      sigma = pow(yProj->GetBinContent(j+1), 0.5);
+    sigma == 0 ? chi = 0 : chi = chi/sigma;
+    indexPsiPi[j] = yMinMass + (j+0.5)*widthy;
+    chiPsiPi[j] = chi;
+  }
+
+  TGraph* chiKPiGraph = new TGraph(xProj->GetNbinsX(), indexKPi, chiKPi);
+  TGraph* chiPsiPiGraph = new TGraph(yProj->GetNbinsX(), indexPsiPi, chiPsiPi);
 
   //Angle efficiency
 
@@ -293,66 +440,139 @@ int eff(int ellEffMass = 0){
 
   parAng[n1a] = 1; //c00 = 1
   for (int index = n1a+1; index < n1a+n2a; index++)
-    parAng[index] = 0;
+    parAng[index] = 1; //era 0
 
   TF2* fitFunAng;
   fitFunAng = new TF2("fitAngEff", rectEff, xMinAng, xMaxAng, yMinAng, yMaxAng, n1a+n2a);
   fitFunAng->SetParameters(parAng);
 
-  for (int index = 0; index < n1a+n2a; index++)
+  for (int index = n1a; index < n1a+n2a; index++)
     fitFun->SetParLimits(index, parAng[index]-margin, parAng[index]+margin);
 
   relEffTH2Ang->Fit("fitAngEff");
 
   TH1F* xProjAng = new TH1F("cosMuMuEff", "cosMuMuEff", relEffTH2Ang->GetNbinsX(), xMinAng, xMaxAng);
   TH1F* yProjAng = new TH1F("phiEff", "phiEff", relEffTH2Ang->GetNbinsY(), yMinAng, yMaxAng);
-  TH1F* xFitProjAng = new TH1F("cosMuMuEffFit","cosMuMuEffFit", nbins, xMinAng, xMaxAng);
-  TH1F* yFitProjAng = new TH1F("phiEffFit","phiEffFit", nbins, yMinAng, yMaxAng);
+  TH1F* xFitProjAng = new TH1F("cosMuMuEffFit","cosMuMuEffFit", nbins2, xMinAng, xMaxAng);
+  TH1F* yFitProjAng = new TH1F("phiEffFit","phiEffFit", nbins3, yMinAng, yMaxAng);
+
+  scalex = floor(nbins2/relEffTH2Ang->GetNbinsX());
+  scaley = floor(nbins3/relEffTH2Ang->GetNbinsY());
 
   sum = 0;
 
   for (int i = 0; i < xProjAng->GetNbinsX(); i++) {
     sum = 0;
     for (int j = 0; j < relEffTH2Ang->GetNbinsY(); j++) {
-      sum += relEffTH2Ang->GetBinContent(i+1, j+1);
+      val = relEffTH2Ang->GetBinContent(i+1, j+1);
+      sum += val;
     }
-    sum *= (yMaxAng - yMinAng)/relEffTH2Ang->GetNbinsY();
     xProjAng->SetBinContent(i+1, sum);
   }
 
   for (int j = 0; j < yProjAng->GetNbinsX(); j++) {
     sum = 0;
     for (int i = 0; i < relEffTH2Ang->GetNbinsX(); i++) {
-      sum += relEffTH2Ang->GetBinContent(i+1, j+1);
+      val = relEffTH2Ang->GetBinContent(i+1, j+1);
+      sum += val;
     }
-    sum *= (xMaxAng - xMinAng)/relEffTH2Ang->GetNbinsX();
     yProjAng->SetBinContent(j+1, sum);
   }
 
-  deltax = (xMaxAng - xMinAng)/nbins;
-  deltay = (yMaxAng - yMinAng)/nbins;
+  deltax = (xMaxAng - xMinAng)/nbins2;
+  deltay = (yMaxAng - yMinAng)/nbins3;
 
-  for (int i = 0; i < nbins; i++) {
+  for (int i = 0; i < nbins2; i++) {
     sum = 0;
     xvar = xMinAng + (i + 0.5)*deltax;
-    for (int j = 0; j < nbins; j++) {
+    for (int j = 0; j < nbins3; j++) {
       yvar = yMinAng + (j + 0.5)*deltay;
-      sum += fitFunAng->Eval(xvar, yvar);
+      val = fitFunAng->Eval(xvar, yvar);
+      sum += val;
     }
-    sum *= deltay;
+    sum *= pow(scaley, -1);
     xFitProjAng->SetBinContent(i+1, sum);
   }
 
-  for (int j = 0; j < nbins; j++) {
+  for (int j = 0; j < nbins3; j++) {
     sum = 0;
     yvar = yMinAng + (j + 0.5)*deltay;
-    for (int i = 0; i < nbins; i++) {
+    for (int i = 0; i < nbins2; i++) {
       xvar = xMinAng + (i + 0.5)*deltax;
-      sum += fitFunAng->Eval(xvar, yvar);
+      val = fitFunAng->Eval(xvar, yvar);
+      sum += val;
     }
-    sum *= deltax;
+    sum *= pow(scalex, -1);
     yFitProjAng->SetBinContent(j+1, sum);
   }
+
+  //Angles chisquare
+
+  double widthxAng = (xMaxAng - xMinAng)/relEffTH2Ang->GetNbinsX();
+  double widthyAng = (yMaxAng - yMinAng)/relEffTH2Ang->GetNbinsY();
+
+  for (int i = 0; i < chiTH2Ang->GetNbinsX(); i++) {
+    for (int j = 0; j < chiTH2Ang->GetNbinsY(); j++) {
+      sum = 0;
+      for (int k = 0; k < scalex; k++) {
+        for (int l = 0; l < scaley; l++) {
+          xvar = xMinAng + i*widthxAng + (k + 0.5)*deltax;
+          yvar = yMinAng + j*widthyAng + (l + 0.5)*deltay;
+          sum += fitFunAng->Eval(xvar, yvar);
+        }
+      }
+      sum *= pow(scalex*scaley, -1);
+      chi = relEffTH2Ang->GetBinContent(i+1, j+1) - sum;
+      sigma = pow(relEffTH2Ang->GetBinContent(i+1, j+1), 0.5);
+      sigma == 0 ? chi = 0 : chi = pow(chi/sigma, 2);
+      chiTH2Ang->SetBinContent(i+1, j+1, chi);
+    }
+  }
+
+  //Pull cosMuMu
+
+  for (int i = 0; i < xProjAng->GetNbinsX(); i++) {
+    sum = 0;
+    for (int j = 0; j < yProjAng->GetNbinsX(); j++) {
+      for (int k = 0; k < scalex; k++) {
+        xvar = xMinAng + i*widthxAng + (k + 0.5)*deltax;
+        for (int l = 0; l < scaley; l++) {
+          yvar = yMinAng + j*widthyAng + (l + 0.5)*deltay;
+          sum += fitFunAng->Eval(xvar, yvar);
+        }
+      }
+    }
+      sum *= pow(scalex*scaley, -1);
+      chi = xProjAng->GetBinContent(i+1) - sum;
+      sigma = pow(xProjAng->GetBinContent(i+1), 0.5);
+    sigma == 0 ? chi = 0 : chi = chi/sigma;
+    indexCosMuMu[i] = xMinAng + (i+0.5)*widthxAng;
+    chiCosMuMu[i] = chi;
+  }  
+
+//Pull phi
+
+  for (int j = 0; j < yProjAng->GetNbinsX(); j++) {
+    sum = 0;
+    for (int i = 0; i < xProjAng->GetNbinsX(); i++) {
+      for (int k = 0; k < scalex; k++) {
+        xvar = xMinAng + i*widthxAng + (k + 0.5)*deltax;
+        for (int l = 0; l < scaley; l++) {
+          yvar = yMinAng + j*widthyAng + (l + 0.5)*deltay;
+          sum += fitFunAng->Eval(xvar, yvar);
+        }
+      }
+    }
+      sum *= pow(scalex*scaley, -1);
+      chi = yProjAng->GetBinContent(j+1) - sum;
+      sigma = pow(yProjAng->GetBinContent(j+1), 0.5);
+    sigma == 0 ? chi = 0 : chi = chi/sigma;
+    indexPhi[j] = yMinAng + (j+0.5)*widthyAng;
+    chiPhi[j] = chi;
+  }
+
+  TGraph* chiCosMuMuGraph = new TGraph(xProjAng->GetNbinsX(), indexCosMuMu, chiCosMuMu);
+  TGraph* chiPhiGraph = new TGraph(yProjAng->GetNbinsX(), indexPhi, chiPhi);
 
   //Plot
 
@@ -378,41 +598,95 @@ int eff(int ellEffMass = 0){
   yFitProjAng->SetLineStyle(2);
   yFitProjAng->SetLineColor(2);
   yFitProjAng->SetLineWidth(1);
-/*
+
+  chiTH2Mass->SetTitle("#chi^{2} mass efficiency");
+  chiTH2Mass->GetZaxis()->SetRangeUser(0, 3);
+  chiTH2Ang->SetTitle("#chi^{2} angle efficiency");
+  chiTH2Ang->GetZaxis()->SetRangeUser(0, 3);
+  chiTH2Mass->GetXaxis()->SetTitle("m(K#pi) [GeV/c2]");
+  chiTH2Mass->GetYaxis()->SetTitle("m(J#psi#pi) [GeV/c2]");
+  chiTH2Ang->GetXaxis()->SetTitle("cos(MuMu)");
+  chiTH2Ang->GetYaxis()->SetTitle("phi [rad]");
+
+  chiKPiGraph->SetMarkerStyle(7);
+  chiPsiPiGraph->SetMarkerStyle(7);
+  chiCosMuMuGraph->SetMarkerStyle(7);
+  chiPhiGraph->SetMarkerStyle(7);
+  chiKPiGraph->SetMinimum(-3);
+  chiKPiGraph->SetMaximum(+3);
+  chiPsiPiGraph->SetMinimum(-3);
+  chiPsiPiGraph->SetMaximum(+3);
+  chiCosMuMuGraph->SetMinimum(-3);
+  chiCosMuMuGraph->SetMaximum(+3);
+  chiPhiGraph->SetMinimum(-3);
+  chiPhiGraph->SetMaximum(+3);
+  chiKPiGraph->GetXaxis()->SetRangeUser(xProj->GetXaxis()->GetXmin(), xProj->GetXaxis()->GetXmax());
+  chiPsiPiGraph->GetXaxis()->SetRangeUser(yProj->GetXaxis()->GetXmin(), yProj->GetXaxis()->GetXmax());
+  chiCosMuMuGraph->GetXaxis()->SetRangeUser(xProjAng->GetXaxis()->GetXmin(), xProjAng->GetXaxis()->GetXmax()); 
+  chiPhiGraph->GetXaxis()->SetRangeUser(yProjAng->GetXaxis()->GetXmin(), yProjAng->GetXaxis()->GetXmax());
+  chiKPiGraph->SetTitle("Pull bin-by-bin");
+  chiPsiPiGraph->SetTitle("Pull bin-by-bin");
+  chiCosMuMuGraph->SetTitle("Pull bin-by-bin");
+  chiPhiGraph->SetTitle("Pull bin-by-bin");
+  chiKPiGraph->GetXaxis()->SetTitle("m(K#pi) [GeV/c2]");
+  chiPsiPiGraph->GetXaxis()->SetTitle("m(J#psi#pi) [GeV/c2]");
+  chiCosMuMuGraph->GetXaxis()->SetTitle("cos(MuMu)");
+  chiPhiGraph->GetXaxis()->SetTitle("phi [rad]");
+
+
   TCanvas *c0 = new TCanvas("canvas", "canvas", 800, 600);
   c0->cd();
   relEffTH2Mass->Draw("COLZ");
-  c0->SaveAs("massEff.png");
-
+  //  c0->SaveAs("massEff.png");
+ 
   TCanvas *c1 = new TCanvas("canvas1", "canvas1", 800, 600);
   c1->cd();
   relEffTH2Ang->Draw("COLZ");
-  c1->SaveAs("angEff.png");
-*/ 
+  //  c1->SaveAs("angEff.png");
+
   TCanvas *cxMass = new TCanvas("canvasDpProjX", "canvasDpProjX", 800, 600);
-  cxMass->cd();
+  cxMass->Divide(1, 2);
+  cxMass->cd(1);
   xProj->Draw();
   xFitProj->Draw("same");
   xProj->Draw("same");
+  cxMass->cd(2);
+  chiKPiGraph->Draw("AP");
 
   TCanvas *cyMass = new TCanvas("canvasDpProjY", "canvasDpProjY", 800, 600);  
-  cyMass->cd();
+  cyMass->Divide(1, 2);
+  cyMass->cd(1);
   yProj->Draw();
   yFitProj->Draw("same");
   yProj->Draw("same");
+  cyMass->cd(2);
+  chiPsiPiGraph->Draw("AP");
 
   TCanvas *cxAng = new TCanvas("canvasAngProjX", "canvasAngProjX", 800, 600);
-  cxAng->cd();
+  cxAng->Divide(1, 2);
+  cxAng->cd(1);
   xProjAng->Draw();
   xFitProjAng->Draw("same");
   xProjAng->Draw("same");
+  cxAng->cd(2);
+  chiCosMuMuGraph->Draw("AP");
 
   TCanvas *cyAng = new TCanvas("canvasAngProjY", "canvasAngProjY", 800, 600);
-  cyAng->cd();
+  cyAng->Divide(1, 2);
+  cyAng->cd(1);
   yProjAng->Draw();
   yFitProjAng->Draw("same");
   yProjAng->Draw("same");
+  cyAng->cd(2);
+  chiPhiGraph->Draw("AP");
+
+  TCanvas *chi2Mass = new TCanvas("chi2Mass", "chi2Mass", 800, 600);
+  chi2Mass->cd();
+  chiTH2Mass->Draw("colz");
+
+  TCanvas *chi2Ang = new TCanvas("chi2Ang", "chi2Ang", 800, 600);
+  chi2Ang->cd();
+  chiTH2Ang->Draw("colz");
 
   return 0;
-
 }
