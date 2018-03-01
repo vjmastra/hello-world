@@ -203,30 +203,25 @@ double rectEff(double *x, double *par){
   xmin = -1; xmax = -xmin;
   ymin = -TMath::Pi(); ymax = -ymin;
 
-  //  valx = 0.25*(1 + erf(par[0]*(x[0] - xmin)))*(1 - erf(par[0]*(x[0] - xmax)));
-  //  valy = 0.25*(1 + erf(par[1]*(x[1] - ymin)))*(1 - erf(par[1]*(x[1] - ymax)));
   if (x[0] < xmin || x[0] > xmax) valx = 0;
   if (x[1] < ymin || x[1] > ymax) valy = 0;
   val1 = valx*valy;
 
-  //  int n1 = 2;
   val2 = 0;
   /*
     for (int i = 0; i < NORD2+1; i++) {
-    for (int j = 0; j < NORD3+1; j++) {
-    val2 += par[n1 + i + j*(NORD3+1)]*pow(x[0], i)*pow(x[1], j);
-    }
+      for (int j = 0; j < NORD3+1; j++) {
+        val2 += par[i + j*(NORD3+1)]*pow(x[0], i)*pow(x[1], j);
+      }
     }
   */
-  /*int n1 = 0;
-  
+  /*
     for (int i = 0; i < NORD2+1; i++) {
     for (int j = 0; j < NORD3+1; j++) {
-    val2 += par[n1 + i + j*(NORD3+1)]*cheb(x[0], i)*cheb(x[1], j);
+    val2 += par[i + j*(NORD3+1)]*cheb(x[0], i)*cheb(x[1], j);
     }
     }
   */
-
   for (int i = 0; i < NORD2+1; i++) {
     for (int j = 0; j < NORD3+1; j++) {
       val2 += par[i + j*(NORD3+1)]*bernstein(x[0], i, NORD2, 2)*bernstein(x[1], j, NORD3, 3);
@@ -237,7 +232,34 @@ double rectEff(double *x, double *par){
   return val;
 }
 
-int eff(int ellEffMass = 0){
+double erfRectEff(double *x, double *par){
+
+  double val = 0;
+  double valx, valy, val1, val2;
+  double xmin, xmax, ymin, ymax;
+
+  valx = 1; valy = 1;
+  xmin = -1; xmax = -xmin;
+  ymin = -TMath::Pi(); ymax = -ymin;
+
+  valx = 0.25*(1 + erf(par[0]*(x[0] - xmin)))*(1 - erf(par[0]*(x[0] - xmax)));
+  valy = 0.25*(1 + erf(par[1]*(x[1] - ymin)))*(1 - erf(par[1]*(x[1] - ymax)));
+  val1 = valx*valy;
+  
+  int n1 = 2;
+  val2 = 0;
+
+ for (int i = 0; i < NORD2+1; i++) {
+    for (int j = 0; j < NORD3+1; j++) {
+      val2 += par[n1 + i + j*(NORD3+1)]*bernstein(x[0], i, NORD2, 2)*bernstein(x[1], j, NORD3, 3);
+    }
+  }
+
+  val = val1*val2;
+  return val;
+}
+
+int eff(int erfSmooth = 0){
 
   gStyle->SetOptStat(00000);
 
@@ -321,11 +343,11 @@ int eff(int ellEffMass = 0){
   int n1 = 0;
   const int n2 = (NORD0+1)*(NORD1+1);
 
-  if (ellEffMass) n1 = 5;
+  if (erfSmooth) n1 = 5;
 
   double par[n1+n2];
 
-  if (ellEffMass) {
+  if (erfSmooth) {
     double ellPar[5] = {1.4, 4, 1, 1, 6};
     for (int index = 0; index < n1; index++)
       par[index] = ellPar[index];
@@ -341,11 +363,11 @@ int eff(int ellEffMass = 0){
   */ 
 
   for (int index = n1; index < n1+n2; index++)
-    par[index] = 1; /////////coeff per bern
+    par[index] = 1;
 
   TF2* fitFun;
 
-  if (ellEffMass)
+  if (erfSmooth)
     fitFun = new TF2("fitMassEff", ellEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
   else fitFun = new TF2("fitMassEff", dalitzEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
   fitFun->SetParameters(par);
@@ -492,22 +514,25 @@ int eff(int ellEffMass = 0){
 
   //Angle efficiency
 
-  const int n1a = 0; ///perchè ho tolto smoothing erf, con erf = 2
+  const int n1a = 0;
+  if (erfSmooth) n1a = 2;
   const int n2a = (NORD2+1)*(NORD3+1);
   double rectPar[2] = {6, 6}; 
   double parAng[n1a+n2a]; 
 
-  for (int index = 0; index < n1a; index++)
-    parAng[index] = rectPar[index];
+  if (erfSmooth) 
+    for (int index = 0; index < n1a; index++) 
+      parAng[index] = rectPar[index];
 
   for (int index = n1a; index < n1a+n2a; index++)
     parAng[index] = 1;
 
   TF2* fitFunAng;
-  fitFunAng = new TF2("fitAngEff", rectEff, xMinAng, xMaxAng, yMinAng, yMaxAng, n1a+n2a);
+  if (erfSmooth) fitFunAng = new TF2("fitAngEff", erfRectEff, xMinAng, xMaxAng, yMinAng, yMaxAng, n1a+n2a);
+    else fitFunAng = new TF2("fitAngEff", rectEff, xMinAng, xMaxAng, yMinAng, yMaxAng, n2a);
   fitFunAng->SetParameters(parAng);
 
-  for (int index = n1a; index < n1a+n2a; index++)
+  for (int index = 0; index < n1a+n2a; index++)
     fitFun->SetParLimits(index, parAng[index]-margin, parAng[index]+margin);
 
   relEffTH2Ang->Fit("fitAngEff");
