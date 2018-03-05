@@ -10,10 +10,10 @@
 #include <TAxis.h>
 #include <TMath.h>
 
-#define NORD0 3
-#define NORD1 3
-#define NORD2 5
-#define NORD3 5
+#define NORD0 4
+#define NORD1 4
+#define NORD2 0
+#define NORD3 0
 
 using namespace std;
 
@@ -193,6 +193,46 @@ double dalitzEff(double *x, double* par){
 
 }
 
+double erfDalitzEff(double *x, double *par){
+
+  double MKaon = 0.493677; double MKaon2 = MKaon*MKaon;
+  double MPion = 0.13957018; double MPion2 = MPion*MPion;
+
+  double MBd = 5.27961; double MBd2 = MBd*MBd;
+  double MPsi_nS = 3.096916; double MJpsi2 = MPsi_nS*MPsi_nS;
+
+  double mKP_1 = x[0];
+  double mPsiP_1 = x[1];
+
+  double val1, val2;
+  if ((mKP_1 < MKaon + MPion) || (mKP_1 > MBd - MPsi_nS) || (mPsiP_1 < MPsi_nS + MPion) || (mPsiP_1 > MBd - MKaon))
+    val1 = 0;
+  else { // Dalitz border from PDG KINEMATICS 43.4.3.1.
+    Float_t E_P = (mPsiP_1*mPsiP_1 - MJpsi2 + MPion2)/(2*mPsiP_1) ;
+    Float_t E_K = (MBd2 - mPsiP_1*mPsiP_1 - MKaon2)/(2*mPsiP_1) ;
+    Float_t E_PpE_K_2 = TMath::Power((E_P + E_K),2);
+    Float_t sqrt_E_P2mMP2 = TMath::Sqrt(E_P*E_P - MPion2);
+    Float_t sqrt_E_K2mMK2 = TMath::Sqrt(E_K*E_K - MKaon2);
+    Float_t mKP2_min = E_PpE_K_2 - TMath::Power(sqrt_E_P2mMP2 + sqrt_E_K2mMK2,2);
+    Float_t mKP2_max = E_PpE_K_2 - TMath::Power(sqrt_E_P2mMP2 - sqrt_E_K2mMK2,2);
+    double xmin = TMath::Sqrt(mKP2_min);
+    double xmax = TMath::Sqrt(mKP2_max);
+    val1 = 0.25*(1 + erf(5*(x[0] - xmin)))*(1 - erf(5*(x[0] - xmax)));
+  }
+
+  int n1 = 0;
+  val2 = 0;
+
+ for (int i = 0; i < NORD0+1; i++) {
+    for (int j = 0; j < NORD1+1; j++) {
+      val2 += par[n1 + i + j*(NORD1+1)]*bernstein(x[0], i, NORD0, 0)*bernstein(x[1], j, NORD1, 1);
+    }
+  }
+
+  val = val1*(1+val2);
+  return val;
+}
+
 double rectEff(double *x, double *par){
 
   double val = 0;
@@ -262,11 +302,13 @@ double erfRectEff(double *x, double *par){
 int eff(int erfSmooth = 0){
 
   gStyle->SetOptStat(00000);
+  ROOT::Math::MinimizerOptions::SetDefaultMaxFunctionCalls(100000);
 
   TFile* effFile = 0;
-  TString path = "/lustrehome/cristella/work/Z_analysis/exclusive/clean_14ott/original/CMSSW_5_3_22/src/UserCode/MuMuPiKPAT/test/sanjay/selector/";
+//  TString path = "/lustrehome/cristella/work/Z_analysis/exclusive/clean_14ott/original/CMSSW_5_3_22/src/UserCode/MuMuPiKPAT/test/sanjay/selector/";
+  TString path = "./";
 
-  TString effName = path + "officialMC_noPtEtaCuts_JPsi_Bd2MuMuKPi_2p0Sig_6p0to9p0SB.root";
+  TString effName = path + "officialMC_noPtEtaCuts_JPsi_Bd2MuMuKPi_2p0Sig_6p0to9p0SB_62M.root";
 
   effFile = TFile::Open(effName);
   if (!effFile) {
@@ -290,7 +332,7 @@ int eff(int erfSmooth = 0){
     std::cout<<"ERROR! Efficiency TH2 named \'"<<relEffNameAng <<"\' not found in TFile \'" <<effFile->GetName() <<"\'.\nReturning" <<std::endl;
     return -1;
   }
-  /*
+  
     relEffNameMass.ReplaceAll("Rel","Abs"); relEffNameAng.ReplaceAll("Rel", "Abs");
 
     TH2F* absEffTH2Mass = (TH2F*)effFile->Get(relEffNameMass) ;
@@ -304,7 +346,7 @@ int eff(int erfSmooth = 0){
     std::cout<<"ERROR! Efficiency TH2 named \'"<<relEffNameAng <<"\' not found in TFile \'" <<effFile->GetName() <<"\'.\nReturning" <<std::endl;
     return -1;
     }
-  */
+  
   double xMinMass = relEffTH2Mass->GetXaxis()->GetBinLowEdge(1);
   double xMaxMass = relEffTH2Mass->GetXaxis()->GetBinUpEdge(relEffTH2Mass->GetNbinsX());
   double yMinMass = relEffTH2Mass->GetYaxis()->GetBinLowEdge(1);
@@ -363,13 +405,14 @@ int eff(int erfSmooth = 0){
   */ 
 
   for (int index = n1; index < n1+n2; index++)
-    par[index] = 1;
+    par[index] = 0;
 
   TF2* fitFun;
 
   if (erfSmooth)
     fitFun = new TF2("fitMassEff", ellEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
-  else fitFun = new TF2("fitMassEff", dalitzEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
+//  else fitFun = new TF2("fitMassEff", dalitzEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
+  else fitFun = new TF2("fitMassEff", erfDalitzEff, xMinMass, xMaxMass, yMinMass, yMaxMass, n1+n2);
   fitFun->SetParameters(par);
 
   double margin = 5;
@@ -514,7 +557,7 @@ int eff(int erfSmooth = 0){
 
   //Angle efficiency
 
-  const int n1a = 0;
+  int n1a = 0;
   if (erfSmooth) n1a = 2;
   const int n2a = (NORD2+1)*(NORD3+1);
   double rectPar[2] = {6, 6}; 
